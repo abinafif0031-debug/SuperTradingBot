@@ -16,25 +16,14 @@ class SignalGenerator:
         self.learned_rules = {}
 
     async def update_sentiment(self):
-        from beast_engine.sentiment_premarket import premarket_sentiment
-        self.premarket_mood, self.premarket_sector = await premarket_sentiment()
+        # معطلة مؤقتاً حتى تصحيح نموذج Claude
+        # from beast_engine.sentiment_premarket import premarket_sentiment
+        # self.premarket_mood, self.premarket_sector = await premarket_sentiment()
+        pass
 
     async def analyze_news(self, headlines):
-        if not headlines:
-            return 3
-        from anthropic import Anthropic
-        from config import ANTHROPIC_API_KEY
-        anthropic = Anthropic(api_key=ANTHROPIC_API_KEY)
-        prompt = f"حلل هذه العناوين وأعط تقييماً من 1 (سلبي جداً) إلى 5 (إيجابي جداً):\n" + "\n".join(headlines) + "\nأجب برقم فقط."
-        resp = anthropic.messages.create(
-            model="claude-3-5-haiku-20241022",
-            max_tokens=5,
-            messages=[{"role":"user","content":prompt}]
-        )
-        try:
-            return int(resp.content[0].text.strip())
-        except:
-            return 3
+        # تعطيل مؤقت حتى يتم تصحيح نموذج Claude
+        return 3
 
     async def evaluate_symbol(self, symbol):
         df_15 = await self.md.get_historical_candles(symbol, '15min', 100)
@@ -46,11 +35,11 @@ class SignalGenerator:
 
         df_15 = add_all_indicators(df_15)
         df_1h = add_emas(df_1h, [20,50])
-        df_1h = add_all_indicators(df_1h)  # لإضافة VWAP وغيره
+        df_1h = add_all_indicators(df_1h)
         df_1m = add_all_indicators(df_1m)
         df_5m = add_all_indicators(df_5m)
 
-        # سكالب
+        # سكالبينج
         if self.premarket_mood != "RISK-OFF":
             scalp_signal = detect_scalp_setup(df_1m, df_5m)
             if scalp_signal:
@@ -60,7 +49,7 @@ class SignalGenerator:
                 scalp_signal['symbol'] = symbol
                 return scalp_signal
 
-        # سوينق
+        # سوينج
         last_15 = df_15.iloc[-1]
         last_1h = df_1h.iloc[-1]
         trend_up = last_1h['EMA20'] > last_1h['EMA50'] and last_1h['close'] > last_1h['VWAP']
@@ -68,7 +57,6 @@ class SignalGenerator:
         macd_ok = last_15['MACD_line'] > last_15['MACD_signal']
         vol_ok = last_15['vol_ratio'] > 1.5
 
-        # اختراق
         df_today = df_15[df_15['date'].dt.date == pd.Timestamp.now().date()]
         today_high = df_today['high'].max() if not df_today.empty else last_15['close']
         breakout = last_15['close'] > today_high and last_15['close'] > last_15['open']
