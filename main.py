@@ -25,7 +25,7 @@ async def main():
     asyncio.create_task(md.twelvedata_ws())
 
     sig_gen = SignalGenerator(md)
-    await sig_gen.update_sentiment()
+    # await sig_gen.update_sentiment()  # مؤقتًا: علّقناها لو مشكلة Claude لسه موجودة
 
     bot = bot_handlers.TradingBot(TELEGRAM_BOT_TOKEN, sig_gen, md)
     tm = TradeManager(md, bot)
@@ -45,13 +45,9 @@ async def main():
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    async with bot.app:
-    await bot.app.start()
-    print("Bot polling started")
-    # تشغيل البولينج (يغني عن updater)
-    await bot.app.updater.start_polling()   # 👈 غلط، امسح هذا السطر
-    # استخدم هذا بداله:
-    await bot.app.run_polling()             # 👈 هذا الصحيح
+    # بدء البوت - متوافق مع python-telegram-bot v21.4
+    print("Starting bot polling...")
+    await bot.app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
