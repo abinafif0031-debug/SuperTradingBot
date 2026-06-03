@@ -21,6 +21,8 @@ async def test_claude_model():
         "claude-3-5-haiku-20241022",
         "claude-3-5-haiku-latest",
         "claude-3-opus-20240229",
+        "claude-3-5-sonnet-20240620",
+        "claude-3-sonnet-20240229",
     ]
     for model in models_to_try:
         try:
@@ -60,7 +62,7 @@ async def main():
     init_db()
     logger.info("قاعدة البيانات جاهزة")
 
-    # 🔍 اختبر النموذج أولاً
+    # اختبر نموذج كلود
     model_name = await test_claude_model()
     if model_name:
         logger.info(f"Claude model selected: {model_name}")
@@ -71,9 +73,8 @@ async def main():
     asyncio.create_task(safe_twelvedata_ws(md))
 
     sig_gen = SignalGenerator(md)
-    # إذا وجدنا نموذج صحيح، نحدث المزاج العام (اختيارياً)
     if model_name:
-        await sig_gen.update_sentiment()   # الآن يمكننا تفعيلها لأننا سنستخدم النموذج الصحيح
+        await sig_gen.update_sentiment()
     else:
         logger.warning("تخطي تحديث المزاج العام لعدم وجود نموذج")
 
@@ -95,7 +96,13 @@ async def main():
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # تشغيل البوت
+    # --- تنظيف أي بولينج قديم لمنع التعارض ---
+    try:
+        await bot.app.updater.stop()
+    except:
+        pass
+
+    # --- تشغيل البوت ---
     logger.info("Starting bot...")
     await bot.app.initialize()
     await bot.app.start()
