@@ -35,8 +35,6 @@ async def main():
     init_db()
     logger.info("قاعدة البيانات جاهزة")
 
-    logger.warning("Claude معطل مؤقتاً – تحليل الأخبار متوقف")
-
     md = MarketData(SYMBOLS)
     asyncio.create_task(safe_twelvedata_ws(md))
 
@@ -59,12 +57,13 @@ async def main():
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # تشغيل البوت – الطريقة الجديدة اللي تمنع التعارض
-    try:
-        logger.info("Starting bot polling...")
-        await bot.app.run_polling(drop_pending_updates=True)
-    except Exception as e:
-        logger.error(f"Bot polling stopped: {e}")
+    # --- تشغيل البوت بطريقة آمنة ---
+    logger.info("Starting bot...")
+    await bot.app.initialize()
+    await bot.app.start()
+    await bot.app.updater.start_polling(drop_pending_updates=True)
+    logger.info("Bot polling started – جاهز لاستقبال الأوامر")
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
     asyncio.run(main())
