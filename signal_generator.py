@@ -27,20 +27,20 @@ class SignalGenerator:
 
     async def evaluate_symbol(self, symbol):
         df_15 = await self.md.get_historical_candles(symbol, '15min', 100)
-df_1h = await self.md.get_historical_candles(symbol, '1h', 100)
-df_1m = await self.md.get_historical_candles(symbol, '1min', 60)
-df_5m = await self.md.get_historical_candles(symbol, '5min', 60)
-if df_15.empty or df_1h.empty:
-    return None
+        df_1h = await self.md.get_historical_candles(symbol, '1h', 100)
+        df_1m = await self.md.get_historical_candles(symbol, '1min', 60)
+        df_5m = await self.md.get_historical_candles(symbol, '5min', 60)
+        if df_15.empty or df_1h.empty:
+            return None
 
-# ضبط الفهرس مرة واحدة فقط لكل إطار
-for df in [df_15, df_1h, df_1m, df_5m]:
-    if not isinstance(df.index, pd.DatetimeIndex):
-        df.set_index('date', inplace=True)
-    df.sort_index(inplace=True)
+        # ضبط الفهرس مرة واحدة فقط لكل إطار
+        for df in [df_15, df_1h, df_1m, df_5m]:
+            if not isinstance(df.index, pd.DatetimeIndex):
+                df.set_index('date', inplace=True)
+            df.sort_index(inplace=True)
 
         df_15 = add_all_indicators(df_15)
-        df_1h = add_emas(df_1h, [20,50])
+        df_1h = add_emas(df_1h, [20, 50])
         df_1h = add_all_indicators(df_1h)
         df_1m = add_all_indicators(df_1m)
         df_5m = add_all_indicators(df_5m)
@@ -63,7 +63,7 @@ for df in [df_15, df_1h, df_1m, df_5m]:
         macd_ok = last_15['MACD_line'] > last_15['MACD_signal']
         vol_ok = last_15['vol_ratio'] > 1.5
 
-        df_today = df_15[df_15['date'].dt.date == pd.Timestamp.now().date()]
+        df_today = df_15[df_15.index.date == pd.Timestamp.now().date()]
         today_high = df_today['high'].max() if not df_today.empty else last_15['close']
         breakout = last_15['close'] > today_high and last_15['close'] > last_15['open']
         vwap_bounce = (last_15['low'] <= last_15['VWAP'] <= last_15['close']) and vol_ok
