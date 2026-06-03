@@ -53,17 +53,17 @@ async def main():
                     logger.error(f"Error evaluating {sym}: {e}")
             await asyncio.sleep(30)
 
-    # تشغيل جميع المهام الخلفية
     asyncio.create_task(scan_loop())
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # تشغيل بوت التليجرام (يمسك الحلقة الرئيسية)
-    try:
-        logger.info("Starting bot polling...")
-        await bot.app.run_polling()
-    except Exception as e:
-        logger.error(f"Bot polling stopped: {e}")
+    # تشغيل البوت بطريقة متوافقة مع asyncio
+    logger.info("Starting bot...")
+    await bot.app.initialize()
+    await bot.app.start()
+    await bot.app.updater.start_polling()
+    logger.info("Bot polling started")
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
     asyncio.run(main())
