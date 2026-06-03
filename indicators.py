@@ -1,7 +1,7 @@
 import pandas_ta as ta
+import pandas as pd
 
 def add_all_indicators(df):
-    # تأكد من أن الفهرس زمني ومرتب
     if not isinstance(df.index, pd.DatetimeIndex):
         df = df.set_index('date')
     df = df.sort_index()
@@ -15,17 +15,15 @@ def add_all_indicators(df):
     df['vol_avg'] = df['volume'].rolling(20).mean()
     df['vol_ratio'] = df['volume'] / df['vol_avg']
     df['CMF'] = ta.cmf(df['high'], df['low'], df['close'], df['volume'], length=20)
-    # اسم النموذج الصحيح
-    engulfing = ta.cdl_pattern(df['open'], df['high'], df['low'], df['close'], name='cdl_engulfing')
-    if engulfing is not None:
-        df['bull_engulf'] = engulfing > 0
-    else:
-        # استخدام الاسم البديل
-        engulfing = ta.cdl_pattern(df['open'], df['high'], df['low'], df['close'], name='CDLENGULFING')
-        if engulfing is not None:
-            df['bull_engulf'] = engulfing > 0
-        else:
-            df['bull_engulf'] = False
+
+    # محاولة استخدام الاسمين المتاحين
+    try:
+        engulf = ta.cdl_pattern(df['open'], df['high'], df['low'], df['close'], name='cdl_engulfing')
+        if engulf is None:
+            raise ValueError
+    except:
+        engulf = ta.cdl_pattern(df['open'], df['high'], df['low'], df['close'], name='CDLENGULFING')
+    df['bull_engulf'] = (engulf > 0) if engulf is not None else False
     return df
 
 def add_emas(df, periods=[20,50]):
