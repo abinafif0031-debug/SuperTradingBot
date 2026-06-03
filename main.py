@@ -53,11 +53,12 @@ async def main():
                     logger.error(f"Error evaluating {sym}: {e}")
             await asyncio.sleep(30)
 
+    # تشغيل جميع المهام الخلفية
     asyncio.create_task(scan_loop())
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # تشغيل البوت مرة واحدة فقط بدون حلقة إعادة تشغيل
+    # تشغيل بوت التليجرام (يمسك الحلقة الرئيسية)
     try:
         logger.info("Starting bot polling...")
         await bot.app.run_polling()
