@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from aiohttp import web
 from config import TELEGRAM_BOT_TOKEN, SYMBOLS, ADMIN_CHAT_ID
 from data_feeds import MarketData
@@ -6,6 +7,10 @@ from signal_generator import SignalGenerator
 from trade_manager import TradeManager
 from beast_engine.adaptive_learner import init_db
 import bot_handlers
+
+# إعداد التسجيل لمعرفة الأخطاء
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 async def health_check(request):
     return web.Response(text="OK")
@@ -17,16 +22,25 @@ async def run_web_server():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
-    print("Health check server started on port 8080")
+    logger.info("Health check server started on port 8080")
+
+async def safe_twelvedata_ws(md):
+    """إعادة تشغيل WebSocket تلقائياً عند الفشل"""
+    while True:
+        try:
+            await md.twelvedata_ws()
+        except Exception as e:
+            logger.error(f"Twelve Data WebSocket انقطع: {e}")
+            await asyncio.sleep(5)  # انتظر ثم أعد المحاولة
 
 async def main():
     init_db()
+    logger.info("قاعدة البيانات جاهزة")
+
     md = MarketData(SYMBOLS)
-    asyncio.create_task(md.twelvedata_ws())
+    asyncio.create_task(safe_twelvedata_ws(md))  # WebSocket محمي
 
     sig_gen = SignalGenerator(md)
-    # await sig_gen.update_sentiment()  # مؤقتًا: علّقناها لو مشكلة Claude لسه موجودة
-
     bot = bot_handlers.TradingBot(TELEGRAM_BOT_TOKEN, sig_gen, md)
     tm = TradeManager(md, bot)
 
@@ -38,16 +52,30 @@ async def main():
                     if signal:
                         await tm.open_trade(signal)
                 except Exception as e:
-                    print(f"Error evaluating {sym}: {e}")
+                    logger.error(f"Error evaluating {sym}: {e}")
             await asyncio.sleep(30)
 
+    async def safe_monitor():
+        """حلقة مراقبة لا تنهار"""
+        while True:
+            try:
+                await tm.monitor_trades()
+            except Exception as e:
+                logger.error(f"Trade monitor crashed: {e}")
+                await asyncio.sleep(5)
+
     asyncio.create_task(scan_loop())
-    asyncio.create_task(tm.monitor_trades())
+    asyncio.create_task(safe_monitor())
     asyncio.create_task(run_web_server())
 
-    # بدء البوت - متوافق مع python-telegram-bot v21.4
-    print("Starting bot polling...")
-    await bot.app.run_polling()
+    # تشغيل البوت مع إعادة تشغيل تلقائية في حالات الفشل
+    while True:
+        try:
+            logger.info("Starting bot polling...")
+            await bot.app.run_polling()
+        except Exception as e:
+            logger.error(f"Bot polling توقف: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(main())
