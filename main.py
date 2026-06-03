@@ -8,7 +8,6 @@ from trade_manager import TradeManager
 from beast_engine.adaptive_learner import init_db
 import bot_handlers
 
-# إعداد التسجيل لمعرفة الأخطاء
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -25,20 +24,19 @@ async def run_web_server():
     logger.info("Health check server started on port 8080")
 
 async def safe_twelvedata_ws(md):
-    """إعادة تشغيل WebSocket تلقائياً عند الفشل"""
     while True:
         try:
             await md.twelvedata_ws()
         except Exception as e:
             logger.error(f"Twelve Data WebSocket انقطع: {e}")
-            await asyncio.sleep(5)  # انتظر ثم أعد المحاولة
+            await asyncio.sleep(5)
 
 async def main():
     init_db()
     logger.info("قاعدة البيانات جاهزة")
 
     md = MarketData(SYMBOLS)
-    asyncio.create_task(safe_twelvedata_ws(md))  # WebSocket محمي
+    asyncio.create_task(safe_twelvedata_ws(md))
 
     sig_gen = SignalGenerator(md)
     bot = bot_handlers.TradingBot(TELEGRAM_BOT_TOKEN, sig_gen, md)
@@ -55,27 +53,16 @@ async def main():
                     logger.error(f"Error evaluating {sym}: {e}")
             await asyncio.sleep(30)
 
-    async def safe_monitor():
-        """حلقة مراقبة لا تنهار"""
-        while True:
-            try:
-                await tm.monitor_trades()
-            except Exception as e:
-                logger.error(f"Trade monitor crashed: {e}")
-                await asyncio.sleep(5)
-
     asyncio.create_task(scan_loop())
-    asyncio.create_task(safe_monitor())
+    asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # تشغيل البوت مع إعادة تشغيل تلقائية في حالات الفشل
-    while True:
-        try:
-            logger.info("Starting bot polling...")
-            await bot.app.run_polling()
-        except Exception as e:
-            logger.error(f"Bot polling توقف: {e}")
-            await asyncio.sleep(5)
+    # تشغيل البوت مرة واحدة فقط بدون حلقة إعادة تشغيل
+    try:
+        logger.info("Starting bot polling...")
+        await bot.app.run_polling()
+    except Exception as e:
+        logger.error(f"Bot polling stopped: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
