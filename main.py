@@ -39,13 +39,18 @@ async def main():
     asyncio.create_task(safe_twelvedata_ws(md))
 
     sig_gen = SignalGenerator(md)
-    bot = bot_handlers.TradingBot(TELEGRAM_BOT_TOKEN, sig_gen, md)
-    tm = TradeManager(md, bot)
+    tm = TradeManager(md, None)  # سنمرر البوت لاحقاً
+    bot = bot_handlers.TradingBot(TELEGRAM_BOT_TOKEN, sig_gen, md, tm)
+
+    # تعيين البوت داخل TradeManager حتى يستطيع إرسال التنبيهات
+    tm.bot = bot
 
     async def scan_loop():
         while True:
             for sym in SYMBOLS:
                 try:
+                    if bot.paused:
+                        continue
                     signal = await sig_gen.evaluate_symbol(sym)
                     if signal:
                         await tm.open_trade(signal)
@@ -57,7 +62,7 @@ async def main():
     asyncio.create_task(tm.monitor_trades())
     asyncio.create_task(run_web_server())
 
-    # --- تشغيل البوت بطريقة آمنة ---
+    # تشغيل البوت
     logger.info("Starting bot...")
     await bot.app.initialize()
     await bot.app.start()
