@@ -1,101 +1,126 @@
+import os
 import time
 import requests
 import pandas as pd
-import numpy as np
-from datetime import datetime
 from telegram import Bot
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TWELVE_DATA_KEY, FINNHUB_API_KEY, ANTHROPIC_API_KEY, CHECK_INTERVAL_MIN, STOCKS
-
-import os
-from telegram import Bot
-
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+from config import *
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-# ---------- حساب المؤشرات ----------
-def compute_indicators(df):
-    df['close'] = df['close'].astype(float)
-    df['volume'] = df['volume'].astype(float)
-    df['EMA5'] = df['close'].ewm(span=5, adjust=False).mean()
-    df['EMA20'] = df['close'].ewm(span=20, adjust=False).mean()
-    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
-    df['RSI'] = 100 - (100 / (1 + df['close'].diff().apply(lambda x: max(x,0)).rolling(14).mean() /
-                               df['close'].diff().apply(lambda x: abs(min(x,0))).rolling(14).mean()))
+# ---------- API SAFE ----------
+def fetch(symbol, interval="1min"):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVE_DATA_KEY}&outputsize=30"
+    r = requests.get(url).json()
+
+    if "values" not in r:
+        return None
+
+    df = pd.DataFrame(r["values"])[::-1]
+    df["close"] = df["close"].astype(float)
+    df["volume"] = df["volume"].astype(float)
     return df
 
-# ---------- جلب البيانات لكل سهم ----------
-def get_stock_data(symbol, interval):
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVE_DATA_KEY}&outputsize=50"
-    data = requests.get(url).json()
-    df = pd.DataFrame(data['values'])[::-1]
-    return compute_indicators(df)
+# ---------- INDICATORS ----------
+def indicators(df):
+    df["ema5"] = df["close"].ewm(span=5).mean()
+    df["ema20"] = df["close"].ewm(span=20).mean()
+    df["vwap"] = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
+    return df
 
-# ---------- فلترة أخبار Finnhub ----------
-def check_finnhub_news(symbol):
-    url = f"https://finnhub.io/api/v1/stock/news?symbol={symbol}&token={FINNHUB_API_KEY}"
-    news = requests.get(url).json()
-    for item in news:
-        if item.get("related") and symbol in item["related"]:
-            return True
-    return False
+# ---------- SCANNER (خفيف) ----------
+def scan_market():
+    candidates = []
 
-# ---------- التحقق من الإشارة ----------
-def check_signal(symbol):
-    df_1m = get_stock_data(symbol, "1min")
-    df_5m = get_stock_data(symbol, "5min")
-    df_15m = get_stock_data(symbol, "15min")
+    for s in STOCKS:
+        df = fetch(s, "1min")
+        if df is None or len(df) < 10:
+            continue
 
-    latest_1m = df_1m.iloc[-1]
-    latest_5m = df_5m.iloc[-1]
-    latest_15m = df_15m.iloc[-1]
+        df = indicators(df)
+        last = df.iloc[-1]
 
-    # إشارات شراء
-    if (latest_1m['close'] > latest_1m['VWAP'] and latest_1m['EMA5'] > latest_1m['EMA20'] and latest_1m['RSI'] < 70 and
-        latest_5m['EMA5'] > latest_5m['EMA20'] and latest_15m['EMA5'] > latest_15m['EMA20']):
-        entry = latest_1m['close']
-        stop_loss = entry * 0.995
-        take_profit = entry * 1.02
-        signal = "Strong BUY"
+        # فلترة سريعة جدًا
+        if last["volume"] > df["volume"].mean() * 1.5:
+            if abs(last["close"] - last["vwap"]) / last["vwap"] < 0.01:
+                candidates.append(s)
 
-    # إشارات بيع
-    elif (latest_1m['close'] < latest_1m['VWAP'] and latest_1m['EMA5'] < latest_1m['EMA20'] and latest_1m['RSI'] > 30 and
-          latest_5m['EMA5'] < latest_5m['EMA20'] and latest_15m['EMA5'] < latest_15m['EMA20']):
-        entry = latest_1m['close']
-        stop_loss = entry * 1.005
-        take_profit = entry * 0.98
-        signal = "Strong SELL"
-    else:
+    return candidates
+
+# ---------- ANALYZER (ثقيل) ----------
+def analyze(symbol):
+    df1 = fetch(symbol, "1min")
+    df5 = fetch(symbol, "5min")
+    df15 = fetch(symbol, "15min")
+
+    if df1 is None or df5 is None or df15 is None:
         return None
 
-    # فلترة الأخبار
-    if check_finnhub_news(symbol):
-        return None
+    df1 = indicators(df1)
+    df5 = indicators(df5)
+    df15 = indicators(df15)
 
-    return {
-        "symbol": symbol,
-        "signal": signal,
-        "entry": entry,
-        "stop_loss": stop_loss,
-        "take_profit": take_profit,
-        "time": datetime.now().strftime("%H:%M:%S")
-    }
+    a = df1.iloc[-1]
+    b = df5.iloc[-1]
+    c = df15.iloc[-1]
 
-# ---------- إرسال Telegram ----------
-def send_telegram(alert):
-    message = f"""
-🚀 {alert['signal']} Alert: {alert['symbol']}
-Entry: {alert['entry']:.2f} USD
-Stop Loss: {alert['stop_loss']:.2f}
-Take Profit: {alert['take_profit']:.2f}
-Time: {alert['time']}
+    # BUY
+    if (
+        a["close"] > a["vwap"] and
+        a["ema5"] > a["ema20"] and
+        b["ema5"] > b["ema20"] and
+        c["ema5"] > c["ema20"]
+    ):
+        return {
+            "symbol": symbol,
+            "type": "BUY",
+            "entry": a["close"],
+            "sl": a["close"] * 0.995,
+            "tp": a["close"] * 1.02
+        }
+
+    # SELL
+    if (
+        a["close"] < a["vwap"] and
+        a["ema5"] < a["ema20"] and
+        b["ema5"] < b["ema20"] and
+        c["ema5"] < c["ema20"]
+    ):
+        return {
+            "symbol": symbol,
+            "type": "SELL",
+            "entry": a["close"],
+            "sl": a["close"] * 1.005,
+            "tp": a["close"] * 0.98
+        }
+
+    return None
+
+# ---------- SEND ----------
+def send(alert):
+    msg = f"""
+🚀 {alert['type']} SIGNAL
+Stock: {alert['symbol']}
+Entry: {alert['entry']}
+SL: {alert['sl']}
+TP: {alert['tp']}
 """
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    bot.send_message(TELEGRAM_CHAT_ID, msg)
 
-# ---------- تشغيل البوت ----------
+# ---------- LOOP ----------
 while True:
-    for symbol in STOCKS:
-        alert = check_signal(symbol)
-        if alert:
-            send_telegram(alert)
-    time.sleep(CHECK_INTERVAL_MIN * 60)
+    try:
+        print("Scanning market...")
+        candidates = scan_market()
+
+        print("Candidates:", candidates)
+
+        for c in candidates:
+            result = analyze(c)
+            if result:
+                send(result)
+
+        time.sleep(CHECK_INTERVAL)
+
+    except Exception as e:
+        print("Error:", e)
+        time.sleep(10)
