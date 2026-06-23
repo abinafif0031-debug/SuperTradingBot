@@ -1,0 +1,21 @@
+# ---------- config.py ----------
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+TWELVE_DATA_KEY = "YOUR_TWELVE_DATA_KEY"
+FINNHUB_API_KEY = "YOUR_FINNHUB_API_KEY"
+ANTHROPIC_API_KEY = "YOUR_ANTHROPIC_API_KEY"
+
+CHECK_INTERVAL_MIN = 3  # فحص كل 3 دقائق
+
+STOCKS = [
+    "AAPL","MSFT","AMZN","GOOGL","NVDA","META","TSLA","LLY","ABBV","PFE",
+    "MRK","TMO","ABT","DHR","BMY","MDT","GILD","CAT","DE","MMM",
+    "ETN","HON","GE","PCAR","EMR","ROP","ADI","COST","WMT","HD",
+    "NKE","LOW","CVS","TGT","BKNG","SBUX","DG","NFLX","ATVI","EA",
+    "TTWO","DIS","VZ","T","TMUS","CHTR","CMCSA","PPG","SHW","ECL",
+    "CUM","ROK","ITW","PH","SWK","FAST","ZTS","SYK","HCA","LH",
+    "DGX","CNC","HUM","EW","REGN","ISRG","BDX","V","MA","PYPL",
+    "SQ","AXP","SCHW","CME","ICE","BLK","INTU","ADBE","CSCO","MSCI",
+    "TJX","KR","DLTR","ROST","AZO","ORLY","GPC","KMX","TSCO"
+    # أكمل الباقي لتصل 140 سهم
+]
