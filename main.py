@@ -6,6 +6,11 @@ from datetime import datetime
 from telegram import Bot
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TWELVE_DATA_KEY, FINNHUB_API_KEY, ANTHROPIC_API_KEY, CHECK_INTERVAL_MIN, STOCKS
 
+import os
+from telegram import Bot
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 # ---------- حساب المؤشرات ----------
